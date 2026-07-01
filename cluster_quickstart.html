@@ -23,18 +23,17 @@ th { background: rgba(175,184,193,.2); }
 a { color: #0969da; } @media (prefers-color-scheme: dark){ a{ color:#58a6ff; } }
 img { max-width: 100%; }
 </style></head>
-<body><h1 id="ifb-cluster-quickstart-vs-code-passwordless-login-conda-test">IFB cluster quickstart — VS Code, passwordless login, conda test</h1>
+<body><h1 id="ifb-cluster-quickstart-vs-code-passwordless-login-conda">IFB cluster quickstart — VS Code, passwordless login, conda</h1>
 <p>A short, project-agnostic setup for working on the <strong>IFB Core cluster</strong> from <strong>VS Code</strong>. Do this
-once; it applies to any course project. ~15 minutes.</p>
+once; it applies to any course project. About 15 minutes.</p>
 <p>Cluster login host: <code>core.cluster.france-bioinformatique.fr</code> (you need an IFB account).</p>
 <hr />
-<h2 id="1-install-vs-code-extensions">1. Install VS Code + extensions</h2>
+<h2 id="1-install-vs-code-the-remote-ssh-extension">1. Install VS Code + the Remote-SSH extension</h2>
 <ol>
 <li>Install <strong>VS Code</strong> on your laptop: <a href="https://code.visualstudio.com/">https://code.visualstudio.com/</a></li>
 <li>Open the Extensions panel (<code>Ctrl/Cmd+Shift+X</code>) and install <strong>Remote - SSH</strong> (Microsoft).</li>
-<li>The <strong>Python</strong>, <strong>Jupyter</strong>, and (optional) <strong>Claude</strong> extensions are installed <em>later</em>, <strong>on
-   the cluster</strong>, once you're connected — VS Code shows an "Install in SSH: …" button for each.</li>
 </ol>
+<p>(The <strong>Python</strong> and <strong>Jupyter</strong> extensions are installed later, on the cluster, in step 5.)</p>
 <hr />
 <h2 id="2-passwordless-login-with-an-ssh-key">2. Passwordless login with an SSH key</h2>
 <p>Instead of typing your password every time, register your laptop with an SSH key.</p>
@@ -48,52 +47,66 @@ ssh-copy-id &lt;your-username&gt;@core.cluster.france-bioinformatique.fr
 # Windows PowerShell (if ssh-copy-id is missing):
 type $env:USERPROFILE\.ssh\id_ed25519.pub | ssh &lt;your-username&gt;@core.cluster.france-bioinformatique.fr &quot;mkdir -p ~/.ssh &amp;&amp; cat &gt;&gt; ~/.ssh/authorized_keys &amp;&amp; chmod 600 ~/.ssh/authorized_keys&quot;
 </code></pre>
-<p><strong>c. Tell your SSH config to use the key.</strong> Open <code>~/.ssh/config</code> (in VS Code: <code>F1</code> →
+<p><strong>c. Tell your SSH config to use the key.</strong> Open <code>~/.ssh/config</code> (in VS Code: <code>F1</code> then
 "Remote-SSH: Open SSH Configuration File") and add:</p>
 <pre><code>Host ifb
     HostName core.cluster.france-bioinformatique.fr
     User &lt;your-username&gt;
     IdentityFile ~/.ssh/id_ed25519
 </code></pre>
-<p><strong>d. Test — should log in with no password:</strong></p>
+<p><strong>d. Test — this should log in with no password:</strong></p>
 <pre><code class="language-bash">ssh ifb
 </code></pre>
 <blockquote>
 <p>If it still asks for a password: on the cluster run <code>chmod 700 ~/.ssh &amp;&amp; chmod 600 ~/.ssh/authorized_keys</code>.
-If you gave the key a passphrase, you'll be asked for <em>that</em> (not your account password); run
+If you gave the key a passphrase, you will be asked for <em>that</em> (not your account password); run
 <code>ssh-add ~/.ssh/id_ed25519</code> once per session to cache it.</p>
 </blockquote>
 <hr />
 <h2 id="3-connect-vs-code-to-the-cluster">3. Connect VS Code to the cluster</h2>
 <ol>
-<li><code>F1</code> → <strong>Remote-SSH: Connect to Host…</strong> → pick <strong><code>ifb</code></strong>. No password prompt.</li>
-<li><strong>File → Open Folder…</strong> to open your working directory on the cluster.</li>
-<li>Install the <strong>Python</strong> and <strong>Jupyter</strong> extensions when VS Code offers "Install in SSH".</li>
+<li><code>F1</code> then <strong>Remote-SSH: Connect to Host...</strong> and pick <strong><code>ifb</code></strong>. No password prompt.</li>
+<li><strong>File then Open Folder...</strong> to open your working directory on the cluster.</li>
 </ol>
 <hr />
-<h2 id="4-minimal-test-can-you-build-a-conda-environment">4. Minimal test — can you build a conda environment?</h2>
-<p>This confirms conda works for your account (independent of any project).</p>
-<p><strong>a. Enable conda once</strong> (in a cluster terminal — the VS Code terminal is fine):</p>
+<h2 id="4-activate-the-shared-conda-environment">4. Activate the shared conda environment</h2>
+<p>A ready-made environment called <strong><code>single_cell</code></strong> already exists on the cluster with the
+scientific Python stack. You do not need to build it — just enable conda and activate it.</p>
+<p><strong>a. Enable conda once</strong> (in a cluster terminal; the VS Code terminal is fine):</p>
 <pre><code class="language-bash">/shared/software/miniconda/bin/conda init bash
 </code></pre>
-<p>Then <strong>open a new terminal</strong> (or <code>source ~/.bashrc</code>) so <code>conda</code> is available.</p>
-<p><strong>b. Create a tiny test environment and verify it:</strong></p>
-<pre><code class="language-bash">conda create -y -n envtest python=3.11 numpy
-conda activate envtest
-python -c &quot;import numpy; print('conda works — numpy', numpy.__version__)&quot;
+<p>Then open a <strong>new terminal</strong> (or run <code>source ~/.bashrc</code>) so <code>conda</code> is available.</p>
+<p><strong>b. Make the shared environments discoverable</strong> (run once; edits your <code>~/.condarc</code>):</p>
+<pre><code class="language-bash">conda config --append envs_dirs /shared/projects/tp_2630_ubordeaux_neuromics_184418/envs
 </code></pre>
-<p>You should see <code>conda works — numpy X.Y.Z</code>. 🎉</p>
-<p><strong>c. Clean up</strong> (optional):</p>
-<pre><code class="language-bash">conda deactivate
-conda env remove -y -n envtest
+<p><strong>c. Activate <code>single_cell</code> and verify:</strong></p>
+<pre><code class="language-bash">conda activate single_cell
+python -c &quot;import scanpy; print('environment OK - scanpy', scanpy.__version__)&quot;
+</code></pre>
+<p>You should see <code>environment OK - scanpy 1.11.5</code>. If <code>conda activate single_cell</code> cannot find it,
+activate by full path instead:</p>
+<pre><code class="language-bash">conda activate /shared/projects/tp_2630_ubordeaux_neuromics_184418/envs/single_cell
 </code></pre>
 <blockquote>
-<p><strong>Rule of thumb:</strong> the login node is for editing and light setup only. Anything heavy
-(training, large data, long jobs) must go through <strong>Slurm</strong> — e.g. grab a compute node with
-<code>srun --account=&lt;your-project-account&gt; --partition=fast --cpus-per-task=4 --mem=16G --time=02:00:00 --pty bash</code>.
-Your project's setup guide lists its Slurm account and any shared environment to use instead of
-building your own.</p>
+<p>Rule of thumb: the login node is for editing and light setup only. Anything heavy (training,
+large data, long jobs) must go through <strong>Slurm</strong> — e.g. grab a compute node with
+<code>srun --account=&lt;your-project-account&gt; --partition=fast --cpus-per-task=4 --mem=16G --time=02:00:00 --pty bash</code>.</p>
 </blockquote>
 <hr />
-<p>That's it — VS Code connects passwordlessly, extensions are in place, and conda works. You're
-ready to open a specific project and follow its own setup notes.</p></body></html>
+<h2 id="5-open-a-jupyter-notebook-in-vs-code-and-run-a-cell">5. Open a Jupyter notebook in VS Code and run a cell</h2>
+<ol>
+<li>With VS Code connected to the cluster (step 3), install these extensions <strong>on the remote</strong>
+   (VS Code shows an <strong>"Install in SSH: ..."</strong> button for each): <strong>Python</strong> (Microsoft) and
+   <strong>Jupyter</strong> (Microsoft).</li>
+<li>Create a notebook: <strong>File then New File...</strong> then choose <strong>Jupyter Notebook</strong> (or make a file
+   ending in <code>.ipynb</code> and open it).</li>
+<li>Top-right of the notebook, click <strong>Select Kernel</strong> then <strong>Python Environments...</strong> and choose
+   <strong><code>single_cell</code></strong>. (If it does not appear, run <code>python -m ipykernel install --user --name single_cell</code>
+   once in an activated terminal, then reload VS Code.)</li>
+<li>In the first cell, type:
+   <code>python
+   print("Hello world")</code>
+   Press <strong>Shift+Enter</strong> to run it. You should see <code>Hello world</code> printed below the cell.</li>
+</ol>
+<p>If that prints, your environment and Jupyter setup are working and you are ready to start a
+project.</p></body></html>
