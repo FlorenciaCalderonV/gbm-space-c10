@@ -135,4 +135,30 @@ conda deactivate
 conda env remove -y -n myenv
 ```
 
-Once step 5 (and, if you tried it, step 6) works, you are ready to start a project.
+---
+
+## 7. Sanity check — run the squidpy IMC tutorial
+
+A final check that the spatial-analysis stack (`squidpy`, `scanpy`) and data downloading all work.
+In a notebook using the **`single_cell`** kernel, work through this short official tutorial:
+
+<https://squidpy.readthedocs.io/en/stable/notebooks/tutorials/tutorial_imc.html>
+
+A minimal version you can paste cell-by-cell:
+```python
+import squidpy as sq
+
+adata = sq.datasets.imc()                       # downloads a small example dataset (~1.5 MB)
+print(adata)
+
+sq.pl.spatial_scatter(adata, shape=None, color="cell type", size=10)   # a spatial plot
+
+sq.gr.spatial_neighbors(adata)                  # build the spatial graph
+sq.gr.nhood_enrichment(adata, cluster_key="cell type")   # neighborhood enrichment test
+sq.pl.nhood_enrichment(adata, cluster_key="cell type")   # heatmap
+```
+If the spatial scatter and the enrichment heatmap both render, your environment is fully working.
+This runs in about a minute on the login node (the neighborhood-enrichment permutation test is the
+slowest part). If you want to run the whole tutorial, that is fine too — it is small.
+
+Once this works, you are ready to start a project.
