@@ -81,6 +81,15 @@ git remote -v      # 'origin' = your fork (you push here); 'upstream' = instruct
 ```bash
 git pull upstream master
 ```
+> **If `git pull upstream master` fails with `Permission denied (publickey)` / `could not read
+> from remote repository`:** your `upstream` was added with the SSH URL (`git@github.com:…`), which
+> needs a key. Point it at HTTPS instead (no key needed for a public repo), then pull again:
+> ```bash
+> git remote set-url upstream https://github.com/arl94/gbm-space-c10.git
+> git remote -v            # upstream should now show https://
+> git pull upstream master
+> ```
+
 To keep those pulls **conflict-free**, do your analysis in a *copy* of the student notebook so you
 never edit the tracked file the instructor might also update:
 ```bash

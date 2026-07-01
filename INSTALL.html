@@ -114,6 +114,15 @@ git remote -v      # 'origin' = your fork (you push here); 'upstream' = instruct
 <p><strong>Get instructor updates anytime</strong> — safe to run whenever notebooks change (public repo, no auth):</p>
 <pre><code class="language-bash">git pull upstream master
 </code></pre>
+<blockquote>
+<p><strong>If <code>git pull upstream master</code> fails with <code>Permission denied (publickey)</code> / <code>could not read
+from remote repository</code>:</strong> your <code>upstream</code> was added with the SSH URL (<code>git@github.com:…</code>), which
+needs a key. Point it at HTTPS instead (no key needed for a public repo), then pull again:
+<code>bash
+git remote set-url upstream https://github.com/arl94/gbm-space-c10.git
+git remote -v            # upstream should now show https://
+git pull upstream master</code></p>
+</blockquote>
 <p>To keep those pulls <strong>conflict-free</strong>, do your analysis in a <em>copy</em> of the student notebook so you
 never edit the tracked file the instructor might also update:</p>
 <pre><code class="language-bash">cp notebooks/level1/01_snrna_analysis_student.ipynb notebooks/level1/01_myname.ipynb
