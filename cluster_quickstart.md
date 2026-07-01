@@ -109,5 +109,30 @@ conda activate /shared/projects/tp_2630_ubordeaux_neuromics_184418/envs/single_c
    ```
    Press **Shift+Enter** to run it. You should see `Hello world` printed below the cell.
 
-If that prints, your environment and Jupyter setup are working and you are ready to start a
-project.
+If that prints, your environment and Jupyter setup are working.
+
+---
+
+## 6. (Optional) Create your own environment and add a package
+
+`single_cell` is shared and read-only. When you need a package it does not have, make your **own**
+environment. This example creates one and installs `scanpy` into it:
+```bash
+conda create -y -n myenv python=3.11 pip
+conda activate myenv
+pip install --no-user scanpy
+python -c "import scanpy; print('my env has scanpy', scanpy.__version__)"
+```
+You should see `my env has scanpy 1.11.5`. Switch back to the course environment anytime with
+`conda activate single_cell`.
+
+> Always use `pip install --no-user` on a shared cluster, so packages go into the active
+> environment and not a shared `~/.local` (which can silently break other environments).
+
+Clean up when you no longer need it:
+```bash
+conda deactivate
+conda env remove -y -n myenv
+```
+
+Once step 5 (and, if you tried it, step 6) works, you are ready to start a project.

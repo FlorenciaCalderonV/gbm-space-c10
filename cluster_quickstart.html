@@ -108,5 +108,24 @@ large data, long jobs) must go through <strong>Slurm</strong> — e.g. grab a co
    print("Hello world")</code>
    Press <strong>Shift+Enter</strong> to run it. You should see <code>Hello world</code> printed below the cell.</li>
 </ol>
-<p>If that prints, your environment and Jupyter setup are working and you are ready to start a
-project.</p></body></html>
+<p>If that prints, your environment and Jupyter setup are working.</p>
+<hr />
+<h2 id="6-optional-create-your-own-environment-and-add-a-package">6. (Optional) Create your own environment and add a package</h2>
+<p><code>single_cell</code> is shared and read-only. When you need a package it does not have, make your <strong>own</strong>
+environment. This example creates one and installs <code>scanpy</code> into it:</p>
+<pre><code class="language-bash">conda create -y -n myenv python=3.11 pip
+conda activate myenv
+pip install --no-user scanpy
+python -c &quot;import scanpy; print('my env has scanpy', scanpy.__version__)&quot;
+</code></pre>
+<p>You should see <code>my env has scanpy 1.11.5</code>. Switch back to the course environment anytime with
+<code>conda activate single_cell</code>.</p>
+<blockquote>
+<p>Always use <code>pip install --no-user</code> on a shared cluster, so packages go into the active
+environment and not a shared <code>~/.local</code> (which can silently break other environments).</p>
+</blockquote>
+<p>Clean up when you no longer need it:</p>
+<pre><code class="language-bash">conda deactivate
+conda env remove -y -n myenv
+</code></pre>
+<p>Once step 5 (and, if you tried it, step 6) works, you are ready to start a project.</p></body></html>
