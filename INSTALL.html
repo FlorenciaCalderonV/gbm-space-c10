@@ -24,27 +24,15 @@ a { color: #0969da; } @media (prefers-color-scheme: dark){ a{ color:#58a6ff; } }
 img { max-width: 100%; }
 </style></head>
 <body><h1 id="setup-guide-c10-ifb-core-cluster">Setup guide — C10 (IFB Core cluster)</h1>
-<blockquote>
-<h2 id="fast-path">⚡ Fast path</h2>
-<p>First <strong>fork</strong> this repo on GitHub into your own account (§1b). Then, once you can log in to the
-cluster (§1), clone <strong>your fork over HTTPS</strong> — the repo is public, so cloning needs <strong>no SSH key
-and no token</strong> — and run the setup script (on the <strong>login node</strong>):
-<code>bash
-git clone https://github.com/&lt;your-github-username&gt;/gbm-space-c10.git ~/gbm-space-c10
-cd ~/gbm-space-c10
-git remote add upstream https://github.com/arl94/gbm-space-c10.git   # instructor's repo, for updates
-bash setup.sh</code>
-<code>setup.sh</code> enables conda, verifies the <code>single_cell</code> environment, and registers the Jupyter
-kernel. Then open a <strong>new terminal</strong> and jump to §3 (VS Code). The sections below explain each
-step manually. <strong>Setup only — run heavy compute via Slurm (§5), not the login node.</strong></p>
-<p><strong>Get instructor updates later:</strong> <code>git pull upstream master</code>. Do your analysis in a <em>copy</em> of the
-student notebook (e.g. <code>01_..._student.ipynb</code> → <code>01_..._myname.ipynb</code>) so updates never clash with your edits.</p>
-</blockquote>
+<p><strong>New here? Work through steps 1–8 below in order</strong> — they explain each part of the setup. Once
+you've done it once, there's a condensed <strong>Fast path</strong> at the very bottom you can reuse.</p>
 <p>Everything for this project runs on the <strong>IFB Core cluster</strong>. You will:
-1. connect to the cluster,
-2. activate the shared conda environment,
-3. edit/run notebooks from <strong>VS Code</strong> with the <strong>Jupyter</strong> and <strong>Claude</strong> extensions,
-4. run any heavy computation through <strong>Slurm</strong> (never on the login node).</p>
+1. set up passwordless login,
+2. connect VS Code to the cluster,
+3. clone the materials (from the VS Code terminal),
+4. activate the shared conda environment,
+5. run a notebook, and
+6. run any heavy computation through <strong>Slurm</strong> (never on the login node).</p>
 <p>Cluster facts you'll reuse:</p>
 <table>
 <thead>
@@ -81,30 +69,65 @@ student notebook (e.g. <code>01_..._student.ipynb</code> → <code>01_..._myname
 </tbody>
 </table>
 <p>IFB user documentation: https://ifb-elixirfr.gitlab.io/cluster/doc/</p>
-<hr />
-<h2 id="1-connect-to-the-cluster">1. Connect to the cluster</h2>
 <p>You need an IFB account with access to the project (ask your instructor if you can't log in).</p>
-<p>From a terminal:</p>
-<pre><code class="language-bash">ssh &lt;your-ifb-username&gt;@core.cluster.france-bioinformatique.fr
-</code></pre>
-<p>You land on a <strong>login node</strong>. The login node is for editing, small commands, and submitting
-jobs — <strong>not</strong> for heavy computation (see §5).</p>
 <hr />
-<h2 id="1b-get-the-materials-with-git-fork-upstream">1b. Get the materials with git (fork + upstream)</h2>
-<p>You'll keep your <strong>own copy</strong> of the repo on GitHub — a <em>fork</em> — so you can freely edit and
-complete the student notebooks, while still pulling in any updates the instructor makes to the
-originals. (A fork is the right model here: you get your own writable copy without needing push
-access to the instructor's repo, and everyone's work stays isolated.)</p>
+<h2 id="1-passwordless-login-with-an-ssh-key">1. Passwordless login with an SSH key</h2>
+<p>Set this up <strong>first</strong>. It lets both a terminal and VS Code connect to the cluster without typing
+your password every time.</p>
+<p><strong>a. Make a key</strong> (skip if <code>~/.ssh/id_ed25519</code> already exists). In a terminal <strong>on your laptop</strong>:</p>
+<pre><code class="language-bash">ssh-keygen -t ed25519          # press Enter through the prompts
+</code></pre>
+<p><strong>b. Copy the public key to the cluster</strong> (asks for your password one last time):</p>
+<pre><code class="language-bash"># macOS / Linux:
+ssh-copy-id &lt;your-username&gt;@core.cluster.france-bioinformatique.fr
+
+# Windows PowerShell (if ssh-copy-id is missing):
+type $env:USERPROFILE\.ssh\id_ed25519.pub | ssh &lt;your-username&gt;@core.cluster.france-bioinformatique.fr &quot;mkdir -p ~/.ssh &amp;&amp; cat &gt;&gt; ~/.ssh/authorized_keys &amp;&amp; chmod 600 ~/.ssh/authorized_keys&quot;
+</code></pre>
+<p><strong>c. Add a host entry to your laptop's <code>~/.ssh/config</code></strong> (VS Code reads this too):</p>
+<pre><code>Host ifb
+    HostName core.cluster.france-bioinformatique.fr
+    User &lt;your-username&gt;
+    IdentityFile ~/.ssh/id_ed25519
+</code></pre>
+<p><strong>d. Test — this should log in with no password:</strong></p>
+<pre><code class="language-bash">ssh ifb
+</code></pre>
+<blockquote>
+<p>If it still asks for a password: on the cluster run <code>chmod 700 ~/.ssh &amp;&amp; chmod 600 ~/.ssh/authorized_keys</code>.
+If you gave the key a passphrase, you'll be asked for <em>that</em> (not your account password); run
+<code>ssh-add ~/.ssh/id_ed25519</code> once per session to cache it.</p>
+</blockquote>
+<hr />
+<h2 id="2-vs-code-connect-to-the-cluster">2. VS Code + connect to the cluster</h2>
+<ol>
+<li>Install <strong>VS Code</strong> on your laptop: https://code.visualstudio.com/</li>
+<li>Open the Extensions panel (<code>Ctrl/Cmd+Shift+X</code>) and install <strong>Remote - SSH</strong> (Microsoft).</li>
+<li>Press <code>F1</code> → <strong>Remote-SSH: Connect to Host…</strong> → pick <strong><code>ifb</code></strong> (the entry you added in step 1c).
+   No password prompt. VS Code now runs <em>on the cluster</em> — its terminal, file explorer, and
+   extensions all operate there.</li>
+<li>Open the integrated terminal with <strong>Terminal → New Terminal</strong>. You'll run the next steps
+   (clone, setup) right here, inside VS Code, on the cluster.</li>
+</ol>
+<blockquote>
+<p>The <strong>Python</strong>, <strong>Jupyter</strong>, and <strong>Claude</strong> extensions are installed later, <strong>on the remote</strong>
+(VS Code shows an "Install in SSH: …" button once you're connected).</p>
+</blockquote>
+<hr />
+<h2 id="3-get-the-materials-with-git-fork-upstream">3. Get the materials with git (fork + upstream)</h2>
+<p>Run these in the <strong>VS Code integrated terminal</strong> (step 2.4). You'll keep your <strong>own copy</strong> of the
+repo on GitHub — a <em>fork</em> — so you can freely edit the notebooks while still pulling in updates the
+instructor makes.</p>
 <p><strong>Step 1 — fork (once, in your browser).</strong> Sign in to GitHub, go to
 <a href="https://github.com/arl94/gbm-space-c10">https://github.com/arl94/gbm-space-c10</a>, and click <strong>Fork</strong> (top-right) → <em>Create fork</em>. You now
 own <code>https://github.com/&lt;your-github-username&gt;/gbm-space-c10</code>.</p>
-<p><strong>Step 2 — clone YOUR fork onto the cluster over HTTPS</strong> (login node). The repo is <strong>public</strong>, so
-cloning needs <strong>no SSH key and no token</strong> — just use the <code>https://</code> URL:</p>
+<p><strong>Step 2 — clone YOUR fork over HTTPS.</strong> The repo is <strong>public</strong>, so cloning needs <strong>no SSH key and
+no token</strong> — just use the <code>https://</code> URL:</p>
 <pre><code class="language-bash">git clone https://github.com/&lt;your-github-username&gt;/gbm-space-c10.git ~/gbm-space-c10
 cd ~/gbm-space-c10
 </code></pre>
 <blockquote>
-<p>⚠️ Don't use the <code>git@github.com:…</code> (SSH) URL for cloning — without an SSH key that fails with
+<p>Don't use the <code>git@github.com:…</code> (SSH) URL for cloning — without an SSH key that fails with
 <em>"Permission denied (publickey) … could not read from remote repository."</em> HTTPS avoids this.</p>
 </blockquote>
 <p><strong>Step 3 — link the instructor's repo as <code>upstream</code></strong> (this is how you receive updates):</p>
@@ -117,7 +140,7 @@ git remote -v      # 'origin' = your fork (you push here); 'upstream' = instruct
 <blockquote>
 <p><strong>If <code>git pull upstream master</code> fails with <code>Permission denied (publickey)</code> / <code>could not read
 from remote repository</code>:</strong> your <code>upstream</code> was added with the SSH URL (<code>git@github.com:…</code>), which
-needs a key. Point it at HTTPS instead (no key needed for a public repo), then pull again:
+needs a key. Point it at HTTPS instead, then pull again:
 <code>bash
 git remote set-url upstream https://github.com/arl94/gbm-space-c10.git
 git remote -v            # upstream should now show https://
@@ -128,7 +151,7 @@ never edit the tracked file the instructor might also update:</p>
 <pre><code class="language-bash">cp notebooks/level1/01_snrna_analysis_student.ipynb notebooks/level1/01_myname.ipynb
 </code></pre>
 <p><strong>Saving your own progress back to your fork (optional).</strong> Cloning/pulling a public repo needs no
-credentials, but <strong>pushing does</strong>. So set up auth only when you first want to push:</p>
+credentials, but <strong>pushing does</strong>. Set up auth only when you first want to push:</p>
 <pre><code class="language-bash">git add notebooks/level1/01_myname.ipynb
 git commit -m &quot;my level 1 progress&quot;
 git push origin master        # asks for GitHub username + a Personal Access Token (not your password)
@@ -143,15 +166,15 @@ git push origin master        # asks for GitHub username + a Personal Access Tok
 <p>The big data <strong>and the precomputed model files are not in the repo</strong> — they stay on the shared
 filesystem (paths are in the notebooks / <code>README.md</code> / <code>precomputed/README.md</code>).</p>
 <hr />
-<h2 id="2-the-conda-environment">2. The conda environment</h2>
+<h2 id="4-the-conda-environment">4. The conda environment</h2>
 <p>A ready-made environment called <strong><code>single_cell</code></strong> already exists on the cluster with the full
 stack (scanpy, anndata, scvi-tools, cell2location, celltypist, infercnvpy, squidpy, harmonypy,
-liana, decoupler, torch, jupyter…). You do <strong>not</strong> need to build it — just enable conda and make
-it discoverable.</p>
+liana, decoupler, torch, jupyter…). You do <strong>not</strong> need to build it — just enable conda and
+activate it.</p>
 <blockquote>
-<p>🚀 <strong>Shortcut:</strong> the setup script does all of §2 (and copies the materials) for you — see the
-box at the top of this file. The manual steps are below in case you want to understand them or
-the script fails.</p>
+<p><strong>Shortcut:</strong> from your clone, <code>bash setup.sh</code> does all of this section (enable conda, make the
+env discoverable, verify it, register the Jupyter kernel). The manual steps are below in case you
+want to understand them or the script fails.</p>
 </blockquote>
 <p><strong>Enable conda in your shell.</strong> <code>module load conda</code> only puts <code>conda</code> on your <code>PATH</code>; it does
 <strong>not</strong> enable <code>conda activate</code> (you'd get <em>"Run 'conda init' before 'conda activate'"</em>). Do this
@@ -162,64 +185,59 @@ conda config --set auto_activate_base false   # don't auto-enter 'base' on every
 <p>Then <strong>open a new terminal</strong> (or <code>source ~/.bashrc</code>). From now on, <code>conda</code> is ready in any shell.</p>
 <blockquote>
 <p>One-off alternative (no <code>~/.bashrc</code> change): run
-<code>source /shared/software/miniconda/etc/profile.d/conda.sh</code> at the start of each session
-instead of <code>conda init</code>.</p>
+<code>source /shared/software/miniconda/etc/profile.d/conda.sh</code> at the start of each session.</p>
 </blockquote>
 <p><strong>Point conda at the shared course environments</strong> (run once; edits your <code>~/.condarc</code>):</p>
 <pre><code class="language-bash">conda config --append envs_dirs /shared/projects/tp_2630_ubordeaux_neuromics_184418/envs
 </code></pre>
 <p><strong>Activate and check:</strong></p>
 <pre><code class="language-bash">conda activate single_cell
-python -c &quot;import scanpy, squidpy, cell2location, celltypist, infercnvpy, liana; print('env OK')&quot;
+python -c &quot;import scanpy; print('environment OK - scanpy', scanpy.__version__)&quot;
 </code></pre>
-<p>If <code>conda activate single_cell</code> can't find it, activate by full path instead:</p>
+<p>You should see <code>environment OK - scanpy 1.11.5</code>. If <code>conda activate single_cell</code> can't find it,
+activate by full path instead:</p>
 <pre><code class="language-bash">conda activate /shared/projects/tp_2630_ubordeaux_neuromics_184418/envs/single_cell
 </code></pre>
-<h3 id="optional-build-your-own-copy">(Optional) Build your own copy</h3>
-<p>Only if you need your own environment, from this folder (after <code>conda init</code>, in a fresh shell):</p>
-<pre><code class="language-bash">mamba env create -n single_cell_mine -f single_cell_environment.yml
-conda activate single_cell_mine
-</code></pre>
-<blockquote>
-<p>On a shared cluster, if you ever <code>pip install</code> into a conda env, always use
-<code>pip install --no-user</code> (a plain <code>pip install</code> can write into <code>~/.local</code> and quietly break
-other environments).</p>
-</blockquote>
 <hr />
-<h2 id="3-vs-code-connecting-to-the-cluster">3. VS Code + connecting to the cluster</h2>
+<h2 id="5-open-a-jupyter-notebook-in-vs-code-and-run-a-cell">5. Open a Jupyter notebook in VS Code and run a cell</h2>
 <ol>
-<li>Install <strong>VS Code</strong> on your own laptop: https://code.visualstudio.com/</li>
-<li>In VS Code, open the Extensions panel (<code>Ctrl/Cmd+Shift+X</code>) and install <strong>"Remote - SSH"</strong>
-   (publisher: Microsoft).</li>
-<li>Press <code>F1</code> → <strong>"Remote-SSH: Connect to Host…"</strong> → <strong>"Add New SSH Host…"</strong> and enter:
-   <code>ssh &lt;your-ifb-username&gt;@core.cluster.france-bioinformatique.fr</code>
-   Then connect. VS Code now runs <em>on the cluster</em> — its terminal, file explorer, and
-   extensions all operate there.</li>
-<li><strong>File → Open Folder…</strong> and open your clone, <code>~/gbm-space-c10</code> (see the Fast-path box for the
-   <code>git clone</code> command, and §2 for git access if you haven't cloned yet).</li>
+<li>Install these extensions <strong>on the remote</strong> (VS Code shows an "Install in SSH: …" button):
+   <strong>Python</strong> (Microsoft) and <strong>Jupyter</strong> (Microsoft).</li>
+<li>Create a notebook: <strong>File → New File…</strong> then choose <strong>Jupyter Notebook</strong> (or make a file ending
+   in <code>.ipynb</code> and open it).</li>
+<li>Top-right of the notebook, click <strong>Select Kernel</strong> → <strong>Python Environments…</strong> and pick
+   <strong><code>single_cell</code></strong>. If it doesn't appear, run <code>python -m ipykernel install --user --name single_cell</code>
+   once in an activated terminal, then reload VS Code.</li>
+<li>In the first cell, type:
+   <code>python
+   print("Hello world")</code>
+   Press <strong>Shift+Enter</strong> to run it. You should see <code>Hello world</code> printed below the cell.</li>
 </ol>
 <blockquote>
-<p>All the remaining extensions (Python, Jupyter, Claude) must be installed <strong>on the remote</strong>
-(VS Code shows an "Install in SSH: …" button once you're connected).</p>
+<p><strong>Where does the kernel actually run?</strong> On <strong>whatever machine VS Code is connected to</strong>. If you
+connected to the login node (step 2) the kernel runs there, with <em>no more memory or CPU than the
+shared login node</em> — fine only for light editing and tiny tests. <strong>To run notebooks with real
+memory/compute, connect VS Code to a compute node — see step 7.</strong></p>
 </blockquote>
 <hr />
-<h2 id="4-jupyter-notebooks-in-vs-code">4. Jupyter notebooks in VS Code</h2>
-<p>Install these extensions <strong>in the remote</strong> (VS Code shows an "Install in SSH: …" button):
-- <strong>Python</strong> (Microsoft)
-- <strong>Jupyter</strong> (Microsoft)</p>
-<p>Then open a notebook, click <strong>"Select Kernel"</strong> (top-right) → <strong>"Python Environments…"</strong> → pick
-<strong><code>single_cell</code></strong> (or the full-path env from §2), and run a cell to confirm it's alive. If
-<code>single_cell</code> doesn't appear, run <code>python -m ipykernel install --user --name single_cell</code> once
-in an activated shell, then reload VS Code.</p>
+<h2 id="6-optional-create-your-own-environment-and-add-a-package">6. (Optional) Create your own environment and add a package</h2>
+<p><code>single_cell</code> is shared and read-only. When you need a package it doesn't have, make your <strong>own</strong>
+environment. This example creates one and installs <code>scanpy</code> into it:</p>
+<pre><code class="language-bash">conda create -y -n myenv python=3.11 pip
+conda activate myenv
+pip install --no-user scanpy
+python -c &quot;import scanpy; print('my env has scanpy', scanpy.__version__)&quot;
+</code></pre>
+<p>You should see <code>my env has scanpy 1.11.5</code>. Switch back to the course environment anytime with
+<code>conda activate single_cell</code>. Clean up when done: <code>conda deactivate &amp;&amp; conda env remove -y -n myenv</code>.</p>
 <blockquote>
-<p>⚠️ <strong>Where does the kernel actually run?</strong> It runs on <strong>whatever machine VS Code is connected
-to</strong>. If you followed §3 you are connected to the <strong>login node</strong> — so the kernel runs there,
-with <em>no more memory or CPU than the shared login node</em>, and heavy cells will be slow and may
-be killed. This is fine <strong>only</strong> for light editing and tiny tests. <strong>To run the notebooks with
-real memory/compute, connect VS Code to a <em>compute node</em> — see §5.</strong></p>
+<p>Always use <code>pip install --no-user</code> on a shared cluster, so packages go into the active
+environment and not a shared <code>~/.local</code> (which can silently break other environments).</p>
 </blockquote>
+<p>You can also rebuild the full course environment yourself from the pinned spec (slower):
+<code>mamba env create -n single_cell_mine -f single_cell_environment.yml</code>.</p>
 <hr />
-<h2 id="5-running-notebooks-with-real-memorycompute-use-slurm-never-the-login-node">5. Running notebooks with real memory/compute — use Slurm, never the login node</h2>
+<h2 id="7-running-notebooks-with-real-memorycompute-use-slurm-never-the-login-node">7. Running notebooks with real memory/compute — use Slurm, never the login node</h2>
 <p>The login node is shared by everyone and is <strong>not</strong> for real compute. To give your notebook the
 memory and CPUs it needs, the kernel must run on a Slurm <strong>compute node</strong>. Pick one method:</p>
 <h3 id="method-a-recommended-connect-vs-code-directly-to-a-compute-node">Method A (recommended) — connect VS Code directly to a compute node</h3>
@@ -231,18 +249,19 @@ resources of a Slurm allocation.</p>
    salloc --account=tp_2630_ubordeaux_neuromics_184418 --partition=fast \
           --cpus-per-task=8 --mem=64G --time=06:00:00
    squeue -u $USER      # note the node you were given, e.g. cpu-node-42</code></li>
-<li><strong>On your laptop</strong>, add to <code>~/.ssh/config</code> (once):
+<li><strong>On your laptop</strong>, extend <code>~/.ssh/config</code> (once):
    ```
    Host ifb
        HostName core.cluster.france-bioinformatique.fr
-       User <your-ifb-username></li>
+       User <your-username>
+       IdentityFile ~/.ssh/id_ed25519</li>
 </ol>
 <p>Host cpu-node-<em> gpu-node-</em>
-       User <your-ifb-username>
+       User <your-username>
        ProxyJump ifb
    <code>``
 3. **In VS Code:**</code>F1<code>→ "Remote-SSH: Connect to Host…" → type the node name (</code>cpu-node-42<code>).
-   VS Code now runs *on the compute node*. Open the project folder, open the notebook, select the</code>single_cell<code>kernel (§4). The kernel now has your allocation's 8 CPUs / 64 GB.
+   VS Code now runs *on the compute node*. Open the project folder, open the notebook, select the</code>single_cell<code>kernel (step 5). The kernel now has your allocation's 8 CPUs / 64 GB.
 4. When finished, close the VS Code remote window and type</code>exit<code>in the</code>salloc` terminal to
    release the node.</p>
 <blockquote>
@@ -252,6 +271,23 @@ new <code>salloc</code>. If connecting to the node fails at your site, use Metho
 </blockquote>
 <p>Ask for the resources you actually need and a <strong>short</strong> <code>--time</code> (shorter jobs start sooner):
 bump <code>--mem</code> (e.g. <code>--mem=128G</code>) for the memory-heavy steps like inferCNV on the full dataset.</p>
+<h3 id="method-a2-grab-a-node-then-ssh-into-it-from-the-cluster">Method A2 — grab a node, then <code>ssh</code> into it from the cluster</h3>
+<p>If you'd rather stay in a plain terminal than reconnect VS Code, you can log directly onto the
+compute node you were allocated (this works because the cluster attaches your SSH session to your
+running job):
+1. From the <strong>login node</strong>, request a node and keep this terminal open:
+   <code>bash
+   salloc --account=tp_2630_ubordeaux_neuromics_184418 --partition=fast \
+          --cpus-per-task=8 --mem=64G --time=06:00:00
+   squeue -u $USER      # note the node, e.g. cpu-node-42</code>
+2. From <strong>another login-node terminal</strong>, SSH onto that node, activate the env, and work there:
+   <code>bash
+   ssh cpu-node-42
+   conda activate single_cell
+   jupyter lab --no-browser --ip=0.0.0.0 --port=8888   # or run your scripts / nbconvert</code>
+   Your shell (and anything it launches) now runs on the compute node with the allocation's
+   resources. To use a notebook in the browser, forward the port as in Method C. This only works
+   while the <code>salloc</code> job is alive.</p>
 <h3 id="method-b-batch-execution-for-long-unattended-runs">Method B — batch execution for long, unattended runs</h3>
 <p>Best for running a whole notebook start-to-finish without babysitting it. Save as
 <code>run_notebook.sh</code> (edit the path), then <code>sbatch</code> it:</p>
@@ -282,35 +318,52 @@ jupyter lab --no-browser --ip=0.0.0.0 --port=8888
 <pre><code class="language-bash">ssh -J &lt;user&gt;@core.cluster.france-bioinformatique.fr -L 8888:&lt;node&gt;:8888 &lt;user&gt;@&lt;node&gt;
 </code></pre>
 <hr />
-<h2 id="6-claude-in-vs-code-ai-coding-help">6. Claude in VS Code (AI coding help)</h2>
+<h2 id="8-claude-in-vs-code-ai-coding-help">8. Claude in VS Code (AI coding help)</h2>
 <ol>
 <li>With VS Code connected to the cluster, install the <strong>Claude Code</strong> extension (publisher:
-   Anthropic) <strong>in the remote</strong>.</li>
+   Anthropic) <strong>on the remote</strong>.</li>
 <li>Open the Claude panel from the sidebar and <strong>sign in</strong> when prompted (a browser window opens
    for authentication).</li>
 <li>Ask Claude for help right next to your code — explaining a function, debugging an error,
    drafting an analysis step.</li>
 </ol>
 <blockquote>
-<p>Use AI as a <strong>learning accelerator, not a replacement for understanding</strong>. If Claude
-suggests a function or parameter you don't recognize, pause and learn what it does before
-using it — that's the part that transfers to your own future projects.</p>
+<p>Use AI as a <strong>learning accelerator, not a replacement for understanding</strong>. If Claude suggests a
+function or parameter you don't recognize, pause and learn what it does before using it — that's
+the part that transfers to your own future projects.</p>
 </blockquote>
 <hr />
 <h2 id="note-on-gpus">Note on GPUs</h2>
 <p>Two steps in the project are much faster on a GPU: <strong>scVI</strong> integration (Level 1) and
 <strong>cell2location</strong> training (Level 2). The <code>gpu</code> partition is <strong>not currently enabled</strong> for this
 course account. Until it is, either use the <strong>Harmony</strong> integration path in Level 1 (CPU, built
-into the notebook) and the provided <strong>precomputed cell2location results</strong> for Level 2, or run
-the GPU steps on CPU with reduced settings for a smaller test. Your instructor will let you
-know when GPU access is available.</p>
+into the notebook) and the provided <strong>precomputed cell2location results</strong> for Level 2, or run the
+GPU steps on CPU with reduced settings for a smaller test. Your instructor will let you know when
+GPU access is available.</p>
 <hr />
 <h2 id="quick-reference">Quick reference</h2>
-<pre><code class="language-bash">ssh &lt;user&gt;@core.cluster.france-bioinformatique.fr        # connect
-module load conda &amp;&amp; conda activate single_cell          # environment
+<pre><code class="language-bash">ssh ifb                                                  # connect (passwordless, from ~/.ssh/config)
+conda activate single_cell                               # environment (after 'conda init')
 srun --account=tp_2630_ubordeaux_neuromics_184418 \
      --partition=fast --cpus-per-task=8 --mem=32G \
      --time=04:00:00 --pty bash                          # interactive compute node
 sbatch run_notebook.sh                                   # batch job
 squeue -u $USER                                          # my jobs
-</code></pre></body></html>
+git pull upstream master                                 # get instructor updates
+</code></pre>
+<hr />
+<h2 id="fast-path-once-youve-done-the-full-setup-once">Fast path (once you've done the full setup once)</h2>
+<p>The order matters: get <strong>VS Code + passwordless login</strong> working <strong>first</strong> (steps 1–2), then do
+everything else — including cloning — from the <strong>terminal inside VS Code</strong>.</p>
+<ol>
+<li>Set up a passwordless SSH key and connect VS Code to the cluster (steps 1–2).</li>
+<li>Open the VS Code integrated terminal (<strong>Terminal → New Terminal</strong>) and run:
+   <code>bash
+   git clone https://github.com/&lt;your-github-username&gt;/gbm-space-c10.git ~/gbm-space-c10
+   cd ~/gbm-space-c10
+   git remote add upstream https://github.com/arl94/gbm-space-c10.git   # instructor repo, for updates
+   bash setup.sh</code>
+<code>setup.sh</code> enables conda, verifies the <code>single_cell</code> environment, and registers the Jupyter
+kernel. The repo is <strong>public</strong>, so cloning needs <strong>no SSH key and no token</strong>. <strong>Setup only — run
+heavy compute via Slurm (step 7), not the login node.</strong></li>
+</ol></body></html>
