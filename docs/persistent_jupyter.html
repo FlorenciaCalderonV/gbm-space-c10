@@ -186,4 +186,22 @@ the job log under <code>~/jupyter_logs/jupyter_&lt;jobid&gt;.log</code>.</p>
 <li><strong>Port already in use</strong> — another server is using that port on the node. Relaunch
   with a different port, e.g. <code>./start_jupyter.sh --port 8890</code>, and use the new port
   in the tunnel and URL.</li>
-</ul></body></html>
+</ul>
+<hr />
+<h2 id="easiest-option-jupyterlab-via-open-ondemand">Easiest option: JupyterLab via Open OnDemand</h2>
+<p>The IFB <strong>Open OnDemand</strong> portal runs JupyterLab for you as a Slurm job on a compute node, in your
+browser — no SSH tunnel needed, and it persists across disconnects the same way (as long as the job
+runs). This is usually the simplest path.</p>
+<ol>
+<li>Go to <a href="https://ondemand.cluster.france-bioinformatique.fr/">https://ondemand.cluster.france-bioinformatique.fr/</a> and log in with your IFB account.</li>
+<li><strong>Interactive Apps -&gt; Jupyter</strong>. Fill the form: <strong>Account/Project</strong> <code>tp_2630_ubordeaux_neuromics_184418</code>,
+   <strong>Partition</strong> <code>fast</code>, then set CPUs / memory / walltime. Click <strong>Launch</strong>.</li>
+<li>When the session starts, click <strong>Connect to Jupyter</strong> (it is running on a compute node).</li>
+<li><strong>Use the <code>single_cell</code> kernel:</strong> register it once (our <code>setup.sh</code> already does this) with
+   <code>conda activate single_cell &amp;&amp; python -m ipykernel install --user --name single_cell --display-name "Python (single_cell)"</code>,
+   then in JupyterLab pick <strong>single_cell</strong> (launcher tile, or Kernel -&gt; Change Kernel).</li>
+<li><strong>Disconnect-safe:</strong> closing the browser/laptop does not stop the session. Return to
+   <strong>My Interactive Sessions</strong> in OnDemand to reconnect while the job is still running; use its
+   time limit to control how long it lives.</li>
+</ol>
+<p>(Confirm the exact Account/Partition field labels on first use — the portal wording may differ slightly.)</p></body></html>

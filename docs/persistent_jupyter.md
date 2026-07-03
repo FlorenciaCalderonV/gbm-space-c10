@@ -212,3 +212,24 @@ Remember:
 - **Port already in use** — another server is using that port on the node. Relaunch
   with a different port, e.g. `./start_jupyter.sh --port 8890`, and use the new port
   in the tunnel and URL.
+
+---
+
+## Easiest option: JupyterLab via Open OnDemand
+
+The IFB **Open OnDemand** portal runs JupyterLab for you as a Slurm job on a compute node, in your
+browser — no SSH tunnel needed, and it persists across disconnects the same way (as long as the job
+runs). This is usually the simplest path.
+
+1. Go to <https://ondemand.cluster.france-bioinformatique.fr/> and log in with your IFB account.
+2. **Interactive Apps -> Jupyter**. Fill the form: **Account/Project** `tp_2630_ubordeaux_neuromics_184418`,
+   **Partition** `fast`, then set CPUs / memory / walltime. Click **Launch**.
+3. When the session starts, click **Connect to Jupyter** (it is running on a compute node).
+4. **Use the `single_cell` kernel:** register it once (our `setup.sh` already does this) with
+   `conda activate single_cell && python -m ipykernel install --user --name single_cell --display-name "Python (single_cell)"`,
+   then in JupyterLab pick **single_cell** (launcher tile, or Kernel -> Change Kernel).
+5. **Disconnect-safe:** closing the browser/laptop does not stop the session. Return to
+   **My Interactive Sessions** in OnDemand to reconnect while the job is still running; use its
+   time limit to control how long it lives.
+
+(Confirm the exact Account/Partition field labels on first use — the portal wording may differ slightly.)
