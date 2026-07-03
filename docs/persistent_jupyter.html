@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>persistent_jupyter</title><style>
+:root { color-scheme: light dark; }
+body { font-family: -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+       line-height: 1.55; max-width: 900px; margin: 2rem auto; padding: 0 1.2rem;
+       color: #1f2328; background: #ffffff; }
+@media (prefers-color-scheme: dark) { body { color: #e6edf3; background: #0d1117; } }
+h1, h2, h3 { line-height: 1.25; margin-top: 1.6em; }
+h1 { border-bottom: 1px solid #d0d7de; padding-bottom: .3em; }
+h2 { border-bottom: 1px solid #d0d7de; padding-bottom: .3em; }
+code { background: rgba(175,184,193,.2); padding: .15em .35em; border-radius: 6px;
+       font-size: 85%; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+pre { background: #f6f8fa; padding: 1rem; border-radius: 8px; overflow: auto; }
+@media (prefers-color-scheme: dark) { pre { background: #161b22; } }
+pre code { background: none; padding: 0; font-size: 90%; }
+blockquote { border-left: .3em solid #d0d7de; margin: .8em 0; padding: .2em 1em;
+             color: inherit; background: rgba(175,184,193,.12); border-radius: 0 6px 6px 0; }
+table { border-collapse: collapse; width: 100%; margin: 1em 0; display: block; overflow: auto; }
+th, td { border: 1px solid #d0d7de; padding: .5em .8em; }
+th { background: rgba(175,184,193,.2); }
+a { color: #0969da; } @media (prefers-color-scheme: dark){ a{ color:#58a6ff; } }
+img { max-width: 100%; }
+</style></head>
+<body><h1 id="keep-your-notebooks-running-when-you-close-your-laptop">Keep your notebooks running when you close your laptop</h1>
+<p>This guide shows how to run Jupyter notebooks on the IFB Core cluster so that
+<strong>your work keeps running on the compute node even after you disconnect</strong> (close
+your laptop, lose Wi-Fi, quit VS Code). You reconnect later and land back on the
+same running kernels, with all your variables and in-progress cells intact.</p>
+<p>It relies on one helper script, <code>start_jupyter.sh</code>, in the project root.</p>
+<hr />
+<h2 id="why-the-naive-approach-loses-your-work">Why the naive approach loses your work</h2>
+<p>The tempting workflow is: open VS Code, use Remote-SSH to connect to a compute
+node, open a <code>.ipynb</code>, and run cells. This works while you are connected, but it
+has a fatal flaw for long analyses:</p>
+<ul>
+<li>The Jupyter <strong>kernel</strong> (the Python process holding your data in memory) is
+  started <strong>by, and tied to, your VS Code / SSH session</strong>.</li>
+<li>When your laptop sleeps or you close VS Code, that session ends, and the kernel
+  is killed along with it.</li>
+<li>Everything in memory is gone. A cell that was still running (integration,
+  cell2location, inferCNV) is interrupted and you start over.</li>
+</ul>
+<p>The problem is that the kernel's lifetime is bound to your laptop's connection.</p>
+<h2 id="how-the-fix-works">How the fix works</h2>
+<p>We move the notebook server <strong>inside the Slurm job</strong>, so it no longer depends on
+your laptop at all:</p>
+<ol>
+<li><code>start_jupyter.sh</code> submits a Slurm job on the <code>fast</code> partition. <strong>The job
+   itself</strong> starts a JupyterLab server on the compute node.</li>
+<li>The server and all its kernels live inside that Slurm allocation. Your laptop
+   is now just a <em>viewer</em> that connects to it over an SSH tunnel.</li>
+<li>When your laptop disconnects, only the viewer goes away. The Slurm job keeps
+   running, so the server and every running cell keep going.</li>
+<li>To get back in, you re-open the same tunnel and the same URL. You reconnect to
+   the <strong>same live server and kernels</strong> — nothing was lost.</li>
+</ol>
+<p>Persistence lasts <strong>as long as the Slurm job is alive</strong> (until its time limit, or
+until you <code>scancel</code> it). It is not forever — it is "for the life of your job",
+which you control (default 8 hours, override with <code>--time</code>).</p>
+<hr />
+<h2 id="one-time-facts-about-the-cluster">One-time facts about the cluster</h2>
+<ul>
+<li><strong>Login host:</strong> <code>core.cluster.france-bioinformatique.fr</code>. This is where you run
+  <code>start_jupyter.sh</code>.</li>
+<li>The <strong>compute node is reached <em>through</em> the login node.</strong> You never connect to a
+  compute node directly from the internet; the SSH tunnel uses the login node as a
+  jump host (<code>-J</code>, "ProxyJump"). This already works on IFB <strong>while you hold a job
+  on that node</strong> — which you do, because your Jupyter job is running there.</li>
+<li>Everything runs in the read-only <code>single_cell</code> conda environment, which already
+  has JupyterLab installed. You do not install anything.</li>
+<li>In the commands below, replace <code>&lt;user&gt;</code> with your IFB username (e.g. the
+  <code>tp######</code> you log in with) and <code>&lt;node&gt;</code> / <code>&lt;port&gt;</code> / <code>&lt;token&gt;</code> with the values
+  the script prints for you.</li>
+</ul>
+<hr />
+<h2 id="method-1-browser-recommended-simplest">Method 1 — Browser (recommended, simplest)</h2>
+<h3 id="step-1-start-the-server-on-the-login-node">Step 1: start the server (on the login node)</h3>
+<p>Log in to the cluster and run the helper from the project root:</p>
+<pre><code class="language-bash">cd /shared/projects/tp_2630_ubordeaux_neuromics_184418/projects/C10/lederer/gbm_space_proj
+./start_jupyter.sh
+</code></pre>
+<p>You can override the resources; every flag also has an environment-variable form:</p>
+<pre><code class="language-bash">./start_jupyter.sh --cpus 16 --mem 128G --time 12:00:00 --port 8888 --dir ~/C10
+# or:  CPUS=16 MEM=128G TIME=12:00:00 ./start_jupyter.sh
+</code></pre>
+<p>Defaults: partition <code>fast</code>, account <code>tp_2630_ubordeaux_neuromics_184418</code>,
+8 CPUs, 64 GB, 8 hours, port 8888, notebook root <code>$HOME</code>.</p>
+<p>The script submits the job and prints a job ID and next steps.</p>
+<h3 id="step-2-wait-for-it-to-start-then-read-the-connection-info">Step 2: wait for it to start, then read the connection info</h3>
+<pre><code class="language-bash">squeue -u $USER          # wait until STATE shows 'R' (running)
+cat ~/jupyter_connect.txt # the job writes node, port, token, tunnel and URL here
+</code></pre>
+<p>If <code>~/jupyter_connect.txt</code> is not there yet, the job has not started — wait a few
+seconds and try again. (JupyterLab takes ~30-60 s to boot the first time.)</p>
+<p>The file looks like this (your node, port and token will differ):</p>
+<pre><code>NODE  : cpu-node-104
+PORT  : 8899
+TOKEN : 4e68cde5b06dd853fdf3476879104dd18e9dced9da552cca
+
+STEP 1 — On your LAPTOP, open a terminal and run this (keep it open):
+
+  ssh -N -L 8899:cpu-node-104:8899 -J tp185005@core.cluster.france-bioinformatique.fr tp185005@cpu-node-104
+
+STEP 2 — In your browser on the laptop, open:
+
+  http://localhost:8899/lab?token=4e68cde5b06dd853fdf3476879104dd18e9dced9da552cca
+</code></pre>
+<h3 id="step-3-open-the-ssh-tunnel-from-your-laptop">Step 3: open the SSH tunnel from your LAPTOP</h3>
+<p>On your <strong>laptop</strong> (not the cluster), open a terminal and paste the tunnel command
+from the file. Its general shape is:</p>
+<pre><code class="language-bash">ssh -N -L &lt;port&gt;:&lt;node&gt;:&lt;port&gt; -J &lt;user&gt;@core.cluster.france-bioinformatique.fr &lt;user&gt;@&lt;node&gt;
+</code></pre>
+<p>What this does:</p>
+<ul>
+<li><code>-L &lt;port&gt;:&lt;node&gt;:&lt;port&gt;</code> forwards <code>localhost:&lt;port&gt;</code> on your laptop to
+  <code>&lt;node&gt;:&lt;port&gt;</code> on the cluster.</li>
+<li><code>-J &lt;user&gt;@core.cluster...</code> jumps through the login node to reach the compute
+  node (which is not directly reachable).</li>
+<li><code>-N</code> means "just forward, do not open a shell."</li>
+</ul>
+<p><strong>Leave this terminal open.</strong> It is the tunnel. On Windows, use the same command
+in PowerShell, Git Bash, or WSL.</p>
+<h3 id="step-4-open-jupyterlab-in-your-browser">Step 4: open JupyterLab in your browser</h3>
+<p>Open the URL from the file, which points at your own laptop:</p>
+<pre><code>http://localhost:&lt;port&gt;/lab?token=&lt;token&gt;
+</code></pre>
+<p>You now have JupyterLab running with full compute-node CPU and memory. Open a
+notebook and work normally.</p>
+<h3 id="step-5-close-your-laptop-come-back-later">Step 5: close your laptop, come back later</h3>
+<p>Close the lid, walk away, lose your connection — it does not matter. The Slurm job,
+the server, and every running cell keep going on the compute node.</p>
+<p>To reconnect: <strong>re-run the same Step 3 tunnel command</strong> and <strong>reopen the same
+Step 4 URL</strong>. You are back on the exact same session with all your variables and
+any still-running cells. (If your laptop changed networks, that is fine; the node
+and token are unchanged as long as the job is alive.)</p>
+<hr />
+<h2 id="method-2-vs-code-connect-to-the-persistent-server">Method 2 — VS Code (connect to the persistent server)</h2>
+<p>If you prefer VS Code, do not let it start its own kernel on the node. Instead,
+point it at the persistent server from Method 1 so the kernel lives in the Slurm
+job, not in VS Code.</p>
+<ol>
+<li>Do Steps 1-3 of Method 1 (start the job, read <code>~/jupyter_connect.txt</code>, open the
+   SSH tunnel from your laptop). Keep the tunnel terminal open.</li>
+<li>In VS Code, open the command palette (<code>Ctrl/Cmd+Shift+P</code>) and run
+   <strong>"Jupyter: Specify Jupyter Server for Connections..."</strong>
+   (equivalently, open a notebook, click the kernel picker in the top right, and
+   choose <strong>"Existing Jupyter Server..."</strong>).</li>
+<li>Choose <strong>"Existing"</strong> and paste the server URL <strong>including the token</strong>:</li>
+</ol>
+<p><code>http://localhost:&lt;port&gt;/?token=&lt;token&gt;</code></p>
+<ol start="4">
+<li>Open your <code>.ipynb</code> and pick a kernel from that server. Cells now run inside the
+   persistent server on the compute node.</li>
+</ol>
+<p>Because the kernel lives in the Slurm job, <strong>closing VS Code or your laptop does
+not kill it.</strong> Reconnect later by reopening the tunnel and re-selecting the same
+existing server.</p>
+<hr />
+<h2 id="managing-the-job">Managing the job</h2>
+<pre><code class="language-bash">squeue -u $USER        # is my Jupyter job still running? on which node?
+scancel &lt;jobid&gt;        # stop the server and free the resources when you are done
+</code></pre>
+<p>The job ID is printed when you launch, and is also in the connection file and in
+the job log under <code>~/jupyter_logs/jupyter_&lt;jobid&gt;.log</code>.</p>
+<p>Remember:</p>
+<ul>
+<li><strong>Persistence lasts only while the Slurm job is alive.</strong> When the job ends
+  (time limit reached, or you <code>scancel</code> it), the server and all kernels stop and
+  in-memory state is lost. Save your work (notebooks, <code>.h5ad</code> outputs) to disk as
+  you go, just as you normally would.</li>
+<li>Please <code>scancel</code> your job when you finish for the day so you are not holding CPUs
+  and memory that other students need.</li>
+</ul>
+<hr />
+<h2 id="quick-troubleshooting">Quick troubleshooting</h2>
+<ul>
+<li><strong><code>~/jupyter_connect.txt</code> is missing</strong> — the job has not started yet (check
+  <code>squeue -u $USER</code>) or JupyterLab is still booting. Wait and re-read it.</li>
+<li><strong>Browser cannot connect / "connection refused"</strong> — the tunnel terminal on your
+  laptop is not open, or you used the wrong node/port. Re-check <code>~/jupyter_connect.txt</code>
+  (the node can differ each time you launch) and re-run the tunnel command.</li>
+<li><strong>"Invalid credentials" / token page</strong> — copy the full URL including
+  <code>?token=...</code> from the connection file.</li>
+<li><strong>Port already in use</strong> — another server is using that port on the node. Relaunch
+  with a different port, e.g. <code>./start_jupyter.sh --port 8890</code>, and use the new port
+  in the tunnel and URL.</li>
+</ul></body></html>
