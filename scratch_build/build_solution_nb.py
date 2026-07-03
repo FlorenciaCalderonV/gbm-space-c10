@@ -253,7 +253,7 @@ if Z.shape[0] != adata.n_obs:
 adata.obsm["X_pca_harmony"] = Z
 print(f"Harmony done in {time.time()-t0:.1f}s -> X_pca_harmony {adata.obsm['X_pca_harmony'].shape}")""")
 
-md(r"""🔬 **TASK 4.3 — scVI.** scVI is a deep generative model trained on raw counts. Full-scale training needs a GPU, so here you run it as a **proof-of-concept on a CPU-friendly subsample** (set `TRAIN_SCVI = True`), then use the GPU-trained **full** latent for the comparison. Notice how much slower scVI is per epoch than Harmony, and why we cap the epochs.""")
+md(r"""🔬 **TASK 4.3 - scVI.** scVI is a deep generative model trained on raw counts. By default you **load** a GPU-trained latent (fast). Set `TRAIN_SCVI = True` to train scVI on **your own cells** instead (uses a GPU if available; a few minutes on CPU). Either way it fills `adata.obsm['X_scvi']` for your cells, so the comparison below works the same.""")
 
 code(r"""# [KEEP-IN-STUDENT]
 # scVI is a GPU-scale step. The FULL 117k-cell latent was trained on a GPU and saved -- it is
@@ -267,47 +267,39 @@ SCVI_LATENT_FILE = "/shared/projects/tp_2630_ubordeaux_neuromics_184418/projects
 md(r"""💡 **HINT — runtime caveat.** scVI training cost scales with dataset size and is genuinely slow on CPU for tens of thousands of cells — avoid scvi-tools' automatic epoch heuristic (`get_max_epochs_heuristic`) for a teaching session; in this environment it picked an epoch count that made the full run take well over an hour with no early feedback, which is the wrong trade for a live class. Use a small, **fixed** epoch count instead — you always know your runtime budget up front. Raise it if you have time or GPU access.""")
 
 code(r"""# [KEEP-IN-STUDENT]
-SCVI_MAX_EPOCHS = 20   # small & fixed: keeps the CPU proof-of-concept fast (raise it with a GPU)
+SCVI_MAX_EPOCHS = 20   # fixed epochs: a few minutes on CPU for the full set, seconds on a GPU
 
 if TRAIN_SCVI:
-    # Run scVI yourself. Full-scale training (117k cells x 100 epochs) needs a GPU, so on CPU we
-    # train a PROOF-OF-CONCEPT on a random subsample -- enough to see the method work and feel its
-    # per-epoch cost. The full-scale (GPU-trained) latent is loaded just below and is what the
-    # comparison and any downstream scVI actually use.
+    # Train scVI on YOUR cells and use that latent. Trains on the HVGs for speed; accelerator="auto"
+    # uses a GPU if one is present, otherwise CPU (a few minutes for the full set).
     import scvi, torch, time
     torch.set_num_threads(8); scvi.settings.seed = 0
-    N_POC = 10000
-    _idx = np.random.RandomState(0).choice(adata.n_obs, min(N_POC, adata.n_obs), replace=False)
     _genes = adata.var_names[adata.var["highly_variable"]] if "highly_variable" in adata.var.columns else adata.var_names
-    _poc = adata[_idx, _genes].copy()   # ~3000 HVGs -> scVI proof-of-concept trains fast on CPU
-    scvi.model.SCVI.setup_anndata(_poc, layer="counts", batch_key="donor_id")
-    _m = scvi.model.SCVI(_poc, n_latent=30)
+    scvi_ad = adata[:, _genes].copy()
+    scvi.model.SCVI.setup_anndata(scvi_ad, layer="counts", batch_key="donor_id")
+    _m = scvi.model.SCVI(scvi_ad, n_latent=30)
     _t0 = time.time()
-    _m.train(max_epochs=SCVI_MAX_EPOCHS, accelerator="cpu", early_stopping=False)
-    _dt = time.time() - _t0
-    print(f"scVI proof-of-concept: {SCVI_MAX_EPOCHS} epochs on {_poc.n_obs:,} cells (CPU) in "
-          f"{_dt/60:.1f} min ({_dt/SCVI_MAX_EPOCHS:.1f}s/epoch). scVI runs on CPU at small scale; "
-          "full-scale scVI was trained on a GPU and is loaded next.")
-
-# Load the full precomputed scVI latent (GPU-trained) -> used for the comparison and downstream.
-if not os.path.exists(SCVI_LATENT_FILE):
-    raise FileNotFoundError(
-        f"Precomputed scVI latent not found:\n  {SCVI_LATENT_FILE}\n"
-        "Repoint this path for your server (see CLAUDE.md).")
-_d = np.load(SCVI_LATENT_FILE, allow_pickle=True)
-_lat = pd.DataFrame(_d["latent"], index=_d["obs_names"].astype(str))
-# Keep YOUR cells (your QC decides the cell set) and pull each one's scVI vector from the precomputed
-# output -- adata is NOT subset to a "common" set. This assumes your QC keeps a SUBSET of the
-# reference cells (you may filter more, but not add cells the reference run had dropped).
-_missing = adata.obs_names.difference(_lat.index)
-if len(_missing):
-    raise ValueError(
-        f"{len(_missing):,} of your {adata.n_obs:,} cells are not in the precomputed scVI latent. "
-        "The precomputed latent covers the reference cell set, so your QC must keep a SUBSET of it "
-        "(you can filter more, but not add cells the reference dropped). Re-check your QC, or set "
-        "TRAIN_SCVI=True to train scVI on your own cells.")
-adata.obsm["X_scvi"] = _lat.reindex(adata.obs_names).values.astype("float32")
-print(f"Set X_scvi for your {adata.n_obs:,} cells from the precomputed latent -> {adata.obsm['X_scvi'].shape}.")
+    _m.train(max_epochs=SCVI_MAX_EPOCHS, accelerator="auto", early_stopping=False)
+    adata.obsm["X_scvi"] = _m.get_latent_representation()
+    print(f"Trained scVI on your {adata.n_obs:,} cells ({SCVI_MAX_EPOCHS} epochs) in "
+          f"{(time.time()-_t0)/60:.1f} min -> X_scvi {adata.obsm['X_scvi'].shape}")
+else:
+    # Load the precomputed (GPU-trained) latent and use it for exactly YOUR cells.
+    if not os.path.exists(SCVI_LATENT_FILE):
+        raise FileNotFoundError(
+            f"Precomputed scVI latent not found:\n  {SCVI_LATENT_FILE}\n"
+            "Repoint this path (see CLAUDE.md), or set TRAIN_SCVI=True to train it yourself.")
+    _d = np.load(SCVI_LATENT_FILE, allow_pickle=True)
+    _lat = pd.DataFrame(_d["latent"], index=_d["obs_names"].astype(str))
+    _missing = adata.obs_names.difference(_lat.index)
+    if len(_missing):
+        raise ValueError(
+            f"{len(_missing):,} of your {adata.n_obs:,} cells are not in the precomputed scVI latent. "
+            "The precomputed latent covers the reference cell set, so your QC must keep a SUBSET of it "
+            "(filter more, but do not add cells the reference dropped). Re-check QC, or set "
+            "TRAIN_SCVI=True to train scVI on your own cells.")
+    adata.obsm["X_scvi"] = _lat.reindex(adata.obs_names).values.astype("float32")
+    print(f"Set X_scvi for your {adata.n_obs:,} cells from the precomputed latent -> {adata.obsm['X_scvi'].shape}.")
 print("X_scvi shape:", adata.obsm["X_scvi"].shape)
 """)
 
