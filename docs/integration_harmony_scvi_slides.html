@@ -99,6 +99,7 @@
   .take .big .mh{color:var(--harmony-l);font-weight:800}
   .take .big .ms{color:var(--scvi-l);font-weight:800}
   .take .small{color:#9fb0c8;font-size:15px;margin-top:14px}
+.notes{margin:14px 0 0;border-top:1px solid var(--line,#d8dee6);padding-top:8px}.notes summary{cursor:pointer;font:600 13px/1.2 system-ui,Arial,sans-serif;color:var(--muted,#5b6470)}.notes p{margin:8px 0 0;font:400 13.5px/1.5 system-ui,Arial,sans-serif;color:var(--muted,#5b6470)}@media print{.notes[open]{display:block}.notes summary{color:#333}}
 </style>
 </head>
 <body>
@@ -111,6 +112,8 @@
     <div class="lead">Removing batch / donor effects while preserving biology</div>
     <div class="stripes"><b style="background:var(--harmony)"></b><b style="background:var(--scvi)"></b></div>
     <div class="meta">Concept slides · CAJAL Neuromics 2026 · Project C10 (GBM spatial)</div>
+  
+    <details class="notes"><summary>Presenter notes</summary><p>When we combine cells from several donors, samples, or sequencing runs, the strongest signals in the data are often technical — which sample a cell came from — rather than biological. Integration removes that technical (batch) structure while keeping the real biology, so the same cell type from different samples lines up. This deck covers the principle, then the two methods the notebook uses — Harmony and scVI — and how they compare.</p></details>
   </section>
 
   <!-- SLIDE 2 -->
@@ -149,6 +152,8 @@
     </div>
     <div class="note"><b>Diagnostic:</b> if the UMAP separates by donor, biology is confounded by batch. Well-integrated data mixes donors within each cell type.</div>
     <div class="foot">CAJAL Neuromics 2026 · Project C10 · scRNA-seq data integration</div>
+  
+    <details class="notes"><summary>Presenter notes</summary><p>The core problem is that batch effects and biology are partly confounded. If donor identity drives the top axes of variation, naive clustering splits each cell type by donor — you get 'donor-A T cells' and 'donor-B T cells' as separate clusters, which is wrong. The goal of integration is to remove technical variation while preserving biological signal, so shared populations align across samples. Diagnose it visually: colour the UMAP by donor — separation by donor means biology is confounded by batch; good integration mixes donors within each cell type. Every method balances a tension: mix batches enough, but do not over-correct and merge genuinely distinct cell types. Because batch and biology are entangled, each method needs assumptions about how to tell them apart — that is where Harmony and scVI differ.</p></details>
   </section>
 
   <!-- SLIDE 3 -->
@@ -184,6 +189,8 @@
       </div>
     </div>
     <div class="foot">CAJAL Neuromics 2026 · Project C10 · scRNA-seq data integration</div>
+  
+    <details class="notes"><summary>Presenter notes</summary><p>Harmony corrects an existing PCA embedding — it never revisits genes, it just moves points in PC space. It iterates two steps to convergence. Step 1, maximum-diversity soft clustering: it soft-clusters all cells (fuzzy k-means, partial memberships) but penalises clusters dominated by a single batch, so clusters correspond to cell types (which span batches) rather than to batches. Step 2, per-cluster correction: within each cluster it measures how far each batch's centroid sits from the cluster centroid — that offset is the batch effect for that cell type — and subtracts a membership-weighted version from each cell. The key idea is that the correction is cluster-specific, so a batch effect that looks different in T cells vs neurons is removed appropriately, rather than one global shift. It is linear-ish, has no neural network to train, runs in seconds on CPU, and stays in the interpretable PCA space — a great default. Limits: it can only correct what PCA captured, and it assumes the within-cell-type batch effect is roughly a location shift.</p></details>
   </section>
 
   <!-- SLIDE 4 -->
@@ -221,6 +228,8 @@
       </div>
     </div>
     <div class="foot">CAJAL Neuromics 2026 · Project C10 · scRNA-seq data integration</div>
+  
+    <details class="notes"><summary>Presenter notes</summary><p>scVI throws out the PCA and models the raw UMI counts directly with a variational autoencoder. Generative story: each cell has an unobserved low-dimensional latent vector z capturing its biological state; a neural-network decoder maps z PLUS the batch label to the parameters of a negative-binomial count distribution for every gene, also accounting for library size. Because batch is fed in explicitly, the model can explain batch-driven differences through that input, leaving z batch-free — that is how integration happens. Training is variational inference: an encoder approximates the posterior over z, and we maximise the ELBO = reconstruction (does the NB decoder explain the observed counts?) minus a KL term keeping z near a standard-normal prior, via stochastic gradient descent over epochs. The output is the per-cell latent z, used like Harmony's embedding. Because it is a full probabilistic count model, you also get denoised expression, differential expression with uncertainty, and a whole family (scANVI for labels, totalVI for CITE-seq). It is non-linear and scales well but is GPU-preferred — slow on CPU at scale, which is why the course loads a precomputed full-data latent and only trains a small subsample as a proof of concept. It is more of a black box; results depend on architecture, epochs, and seed.</p></details>
   </section>
 
   <!-- SLIDE 5 -->
@@ -245,6 +254,8 @@
       </table>
     </div>
     <div class="foot">CAJAL Neuromics 2026 · Project C10 · scRNA-seq data integration</div>
+  
+    <details class="notes"><summary>Presenter notes</summary><p>Walking the rows: Model type — Harmony is iterative clustering plus a linear correction; scVI is a deep generative VAE. Input — Harmony corrects your PCA; scVI models raw counts with batch as a covariate. Speed — Harmony is fast and CPU-friendly (seconds); scVI is slower and GPU-preferred. Scalability — both scale, scVI especially to millions of cells. Extras — scVI gives denoising, DE, and uncertainty that Harmony cannot; Harmony's advantage is simplicity, robustness, and an interpretable space. Failure modes: Harmony can only fix what PCA saw and assumes shift-like batch effects; scVI can over- or under-correct and is sensitive to epochs and architecture. Practical rule: Harmony as a fast first pass, scVI when you have a GPU, large data, or want the generative extras.</p></details>
   </section>
 
   <!-- SLIDE 6 -->
@@ -255,6 +266,8 @@
     <div class="stripes" style="max-width:100%"><b style="background:var(--harmony)"></b><b style="background:var(--scvi)"></b></div>
     <div class="big">Judge each method on how well it <span class="mh">mixes donors</span> while <span class="ms">preserving cell-type structure</span>.</div>
     <div class="small">In the notebook: run integration, color the UMAP by donor and by cell type, and see which embedding balances both.</div>
+  
+    <details class="notes"><summary>Presenter notes</summary><p>How to actually judge integration — check two things at once. Mixing: do donors overlap? Quantify with the same-donor neighbour fraction — for each cell, the fraction of its k nearest neighbours from the same donor; it should drop from about 1.0 (no correction) toward each donor's global share (perfect mixing). Biology preserved: do known cell types still separate? Good integration improves mixing WITHOUT smearing distinct cell types together. In the notebook you run neighbours+UMAP on each embedding, colour by donor and by cell type, and compute that neighbour-purity metric; in the two-donor teaching run the methods perform comparably, so we proceed with Harmony (seconds vs minutes on CPU) but keep X_scvi so you can flip the INTEGRATION_METHOD flag and reproduce everything with scVI. One-line intuition: Harmony nudges points in PCA space so batches mix within each cell-type cluster; scVI learns a neural latent space of the counts in which the batch variable has been explained away.</p></details>
   </section>
 
 </div>
