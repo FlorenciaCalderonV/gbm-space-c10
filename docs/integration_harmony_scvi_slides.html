@@ -1,0 +1,278 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Integrating single-cell data: Harmony &amp; scVI</title>
+<style>
+  :root{
+    --harmony:#2e86de; --harmony-l:#6fb4f0;
+    --scvi:#b03aa6;    --scvi-l:#d98fe0;
+    --good:#188a63;    --bad:#d94a3a;
+    --ink:#1a202c;     --muted:#5b6470;
+    --bg:#e9edf2;      --card:#ffffff; --panel:#f3f5f8; --line:#d8dee6;
+    --navy:#101a2b;
+  }
+  @media (prefers-color-scheme: dark){
+    :root{
+      --ink:#e8edf3; --muted:#9aa7b6;
+      --bg:#0c1017; --card:#161c26; --panel:#1e2733; --line:#2c3745;
+    }
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0}
+  body{
+    background:var(--bg); color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;
+    line-height:1.5; padding:32px 16px;
+  }
+  .deck{max-width:1060px;margin:0 auto;display:flex;flex-direction:column;gap:28px}
+  .slide{
+    background:var(--card); border:1px solid var(--line); border-radius:16px;
+    padding:44px 48px; position:relative; overflow:hidden;
+    box-shadow:0 6px 22px rgba(0,0,0,.08); aspect-ratio:16/9; display:flex; flex-direction:column;
+  }
+  @media(max-width:720px){ .slide{aspect-ratio:auto;padding:30px 24px} }
+  .num{position:absolute;top:18px;right:26px;font-size:13px;color:var(--muted);font-weight:700}
+  .kick{display:flex;align-items:center;gap:12px;margin-bottom:14px;font-weight:800;
+        letter-spacing:.06em;font-size:14px;text-transform:uppercase}
+  .kick .bar{width:10px;height:22px;border-radius:3px;display:inline-block}
+  h1{font-size:clamp(26px,3.6vw,42px);margin:0 0 6px;line-height:1.08;font-weight:800}
+  h2{font-size:clamp(22px,2.8vw,32px);margin:0 0 4px;line-height:1.12;font-weight:800}
+  .sub{color:var(--muted);font-size:clamp(14px,1.5vw,17px);margin-bottom:22px}
+  ul{margin:6px 0 0;padding:0;list-style:none}
+  li{position:relative;padding-left:22px;margin:11px 0;font-size:clamp(14px,1.5vw,16px)}
+  li::before{content:"";position:absolute;left:0;top:.55em;width:8px;height:8px;border-radius:50%;
+    background:var(--dot,var(--good))}
+  .cols{display:flex;gap:30px;flex-wrap:wrap;flex:1}
+  .col{flex:1;min-width:260px}
+  .card2{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:18px 20px}
+  .card2 .t{font-weight:800;margin-bottom:12px;font-size:15px}
+  .step{background:var(--card);border:1.5px solid var(--line);border-radius:9px;padding:9px 12px;
+        font-size:14px;text-align:center;font-weight:600}
+  .step.hi{border-color:var(--harmony)}
+  .arrow{text-align:center;color:var(--harmony);font-weight:800;margin:3px 0;font-size:13px}
+  .foot{margin-top:auto;padding-top:16px;color:var(--muted);font-size:12px;border-top:1px solid var(--line)}
+  /* title slide */
+  .title{background:var(--navy);color:#fff;border:none}
+  .title .eyebrow{color:#8fa6c8;font-weight:800;letter-spacing:.08em;font-size:14px;text-transform:uppercase}
+  .title h1{color:#fff;margin-top:auto}
+  .title .hl-h{color:var(--harmony-l)} .title .hl-s{color:var(--scvi-l)}
+  .title .lead{color:#b9c6d9;font-size:clamp(15px,1.8vw,19px);margin-top:12px}
+  .title .meta{margin-top:auto;color:#7e92b0;font-size:13px}
+  .title .stripes{height:8px;display:flex;margin:22px 0}
+  .stripes b{flex:1;height:100%}
+  /* umap */
+  .umaps{display:flex;gap:18px;flex-wrap:wrap}
+  .umap{flex:1;min-width:180px;background:var(--panel);border:1px solid var(--line);border-radius:12px;
+        padding:12px;text-align:center}
+  .umap .cap{font-size:12.5px;font-weight:700;margin-bottom:6px}
+  .umap svg{width:100%;height:auto;display:block}
+  .tag{font-size:12px;font-weight:800;margin-top:6px}
+  .tag.g{color:var(--good)} .tag.b{color:var(--bad)}
+  .legend{display:flex;gap:20px;margin-top:14px;font-size:13px;color:var(--muted);align-items:center}
+  .legend i{display:inline-block;width:13px;height:13px;border-radius:50%;margin-right:6px;vertical-align:-1px}
+  .note{background:var(--panel);border-radius:10px;padding:12px 16px;margin-top:16px;font-size:14px}
+  /* table */
+  .wrap{overflow-x:auto;flex:1}
+  table{border-collapse:collapse;width:100%;min-width:560px;font-size:14px}
+  th,td{padding:11px 14px;text-align:left;border:1px solid var(--line);vertical-align:middle}
+  th.cat{background:#2a313d;color:#fff}
+  th.h{background:var(--harmony);color:#fff;font-size:16px;text-align:center}
+  th.s{background:var(--scvi);color:#fff;font-size:16px;text-align:center}
+  td.cat{background:var(--panel);font-weight:700;white-space:nowrap}
+  tbody tr:nth-child(even) td{background:var(--panel)}
+  /* vae */
+  .vae{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:10px 0}
+  .vnode{border-radius:9px;padding:12px 14px;font-size:13px;font-weight:700;text-align:center;flex:1;min-width:70px}
+  .vnode.io{background:var(--card);border:1.5px solid var(--line)}
+  .vnode.enc{background:var(--scvi);color:#fff}
+  .vnode.z{background:var(--scvi-l);color:#20101f}
+  .vsep{color:var(--muted);font-weight:800}
+  .batch{display:inline-block;border:1.5px solid var(--scvi);color:var(--scvi);border-radius:8px;
+         padding:6px 12px;font-size:12.5px;font-weight:800;margin-top:8px}
+  /* takeaway */
+  .take{background:var(--navy);color:#fff;border:none}
+  .take .eyebrow{color:#8fa6c8;font-weight:800;letter-spacing:.08em;text-transform:uppercase;font-size:14px}
+  .take h1{color:#fff;margin:14px 0}
+  .take .big{font-size:clamp(18px,2.2vw,24px);color:#c7d3e4;margin:18px 0}
+  .take .big .mh{color:var(--harmony-l);font-weight:800}
+  .take .big .ms{color:var(--scvi-l);font-weight:800}
+  .take .small{color:#9fb0c8;font-size:15px;margin-top:14px}
+</style>
+</head>
+<body>
+<div class="deck">
+
+  <!-- SLIDE 1 -->
+  <section class="slide title">
+    <div class="eyebrow">Data integration in single-cell RNA-seq</div>
+    <h1>Integrating single-cell data:<br><span class="hl-h">Harmony</span> &amp; <span class="hl-s">scVI</span></h1>
+    <div class="lead">Removing batch / donor effects while preserving biology</div>
+    <div class="stripes"><b style="background:var(--harmony)"></b><b style="background:var(--scvi)"></b></div>
+    <div class="meta">Concept slides · CAJAL Neuromics 2026 · Project C10 (GBM spatial)</div>
+  </section>
+
+  <!-- SLIDE 2 -->
+  <section class="slide">
+    <div class="num">2</div>
+    <div class="kick" style="color:var(--good)"><span class="bar" style="background:var(--good)"></span>The principle</div>
+    <h2>Why integrate?</h2>
+    <div class="sub">Same cell type, different samples — should cluster by biology, not by batch</div>
+    <div class="cols">
+      <div class="col">
+        <ul style="--dot:var(--good)">
+          <li>Multiple donors / samples / runs introduce technical differences = <b>batch effects</b></li>
+          <li>A T cell from donor A and donor B are the same cell type — they should <b>mix</b></li>
+          <li>Goal: remove technical variation, <b>keep biological signal</b></li>
+          <li>Integration aligns shared cell populations across samples</li>
+        </ul>
+      </div>
+      <div class="col">
+        <div class="umaps">
+          <div class="umap">
+            <div class="cap">Before: colored by donor</div>
+            <svg viewBox="0 0 120 100" id="u1"></svg>
+            <div class="tag b">SPLIT BY DONOR = bad</div>
+          </div>
+          <div class="umap">
+            <div class="cap">After integration</div>
+            <svg viewBox="0 0 120 100" id="u2"></svg>
+            <div class="tag g">MIXED = good</div>
+          </div>
+        </div>
+        <div class="legend">
+          <span><i style="background:var(--harmony)"></i>donor A</span>
+          <span><i style="background:var(--scvi)"></i>donor B</span>
+        </div>
+      </div>
+    </div>
+    <div class="note"><b>Diagnostic:</b> if the UMAP separates by donor, biology is confounded by batch. Well-integrated data mixes donors within each cell type.</div>
+    <div class="foot">CAJAL Neuromics 2026 · Project C10 · scRNA-seq data integration</div>
+  </section>
+
+  <!-- SLIDE 3 -->
+  <section class="slide">
+    <div class="num">3</div>
+    <div class="kick" style="color:var(--harmony)"><span class="bar" style="background:var(--harmony)"></span>Method 1</div>
+    <h2 style="color:var(--harmony)">Harmony</h2>
+    <div class="sub">Fast, CPU-friendly batch correction in PCA space</div>
+    <div class="cols">
+      <div class="col">
+        <ul style="--dot:var(--harmony)">
+          <li>Operates on an existing <b>PCA embedding</b> (not raw counts)</li>
+          <li>Iterative loop: soft k-means clustering → estimate batch shifts → correct</li>
+          <li>Removes batch offsets <b>within each cluster</b>, keeps cluster structure</li>
+          <li>Linear-ish correction, <b>no neural network to train</b></li>
+          <li>Fast, runs on CPU — a good default first pass</li>
+          <li>Returns a corrected embedding for neighbors / UMAP / clustering</li>
+        </ul>
+      </div>
+      <div class="col" style="max-width:340px">
+        <div class="card2">
+          <div class="t" style="color:var(--harmony)">The Harmony loop</div>
+          <div class="step">PCA embedding (input)</div>
+          <div class="arrow">↓</div>
+          <div class="step hi">Soft-cluster cells</div>
+          <div class="arrow">↓</div>
+          <div class="step hi">Estimate batch shift / cluster</div>
+          <div class="arrow">↓</div>
+          <div class="step hi">Subtract shift → correct</div>
+          <div class="arrow">↺</div>
+          <div class="step">Repeat until stable</div>
+        </div>
+      </div>
+    </div>
+    <div class="foot">CAJAL Neuromics 2026 · Project C10 · scRNA-seq data integration</div>
+  </section>
+
+  <!-- SLIDE 4 -->
+  <section class="slide">
+    <div class="num">4</div>
+    <div class="kick" style="color:var(--scvi)"><span class="bar" style="background:var(--scvi)"></span>Method 2</div>
+    <h2 style="color:var(--scvi)">scVI</h2>
+    <div class="sub">Deep generative model that learns a batch-free latent space</div>
+    <div class="cols">
+      <div class="col">
+        <ul style="--dot:var(--scvi)">
+          <li><b>Variational autoencoder (VAE)</b> — a neural network model</li>
+          <li>Models <b>raw counts</b> directly (negative-binomial), no pre-PCA</li>
+          <li>Conditions on batch → factors technical variation out of the latent space</li>
+          <li>Learns a <b>low-dimensional latent embedding</b> for downstream steps</li>
+          <li><b>GPU-accelerated</b>; scales to very large datasets</li>
+          <li>Probabilistic → extras: <b>denoising, normalized expression, DE</b></li>
+        </ul>
+      </div>
+      <div class="col" style="max-width:360px">
+        <div class="card2">
+          <div class="t" style="color:var(--scvi)">The VAE, conditioned on batch</div>
+          <div class="vae">
+            <span class="vnode io">raw<br>counts</span>
+            <span class="vsep">→</span>
+            <span class="vnode enc">encoder</span>
+            <span class="vsep">→</span>
+            <span class="vnode z">latent z<br><small>batch-free</small></span>
+          </div>
+          <div style="text-align:center"><span class="batch">↑ batch label (covariate)</span></div>
+          <div style="font-size:13px;color:var(--muted);margin-top:12px">
+            Batch is fed in as a covariate, so the latent space <b>z</b> captures biology with donor effects removed.
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="foot">CAJAL Neuromics 2026 · Project C10 · scRNA-seq data integration</div>
+  </section>
+
+  <!-- SLIDE 5 -->
+  <section class="slide">
+    <div class="num">5</div>
+    <div class="kick" style="color:var(--ink)"><span class="bar" style="background:linear-gradient(var(--harmony),var(--scvi))"></span>Side by side</div>
+    <h2>Harmony vs scVI</h2>
+    <div class="sub">The key comparison</div>
+    <div class="wrap">
+      <table>
+        <thead>
+          <tr><th class="cat">Category</th><th class="h">Harmony</th><th class="s">scVI</th></tr>
+        </thead>
+        <tbody>
+          <tr><td class="cat">Model type</td><td>Iterative clustering + linear correction</td><td>Deep generative model (VAE)</td></tr>
+          <tr><td class="cat">Input</td><td>PCA embedding</td><td>Raw counts</td></tr>
+          <tr><td class="cat">Speed / compute</td><td>Fast · CPU-friendly</td><td>Slower · GPU-preferred</td></tr>
+          <tr><td class="cat">Scalability</td><td>Good; very quick to re-run</td><td>Excellent; scales to millions of cells</td></tr>
+          <tr><td class="cat">Extras</td><td>Simple, robust, few knobs</td><td>Denoising, DE, uncertainty</td></tr>
+          <tr><td class="cat">When to use</td><td>Quick first pass, CPU-only</td><td>Large data, GPU, deeper modelling</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="foot">CAJAL Neuromics 2026 · Project C10 · scRNA-seq data integration</div>
+  </section>
+
+  <!-- SLIDE 6 -->
+  <section class="slide take">
+    <div class="num" style="color:#7e92b0">6</div>
+    <div class="eyebrow">Takeaway</div>
+    <h1>Try both — then compare.</h1>
+    <div class="stripes" style="max-width:100%"><b style="background:var(--harmony)"></b><b style="background:var(--scvi)"></b></div>
+    <div class="big">Judge each method on how well it <span class="mh">mixes donors</span> while <span class="ms">preserving cell-type structure</span>.</div>
+    <div class="small">In the notebook: run integration, color the UMAP by donor and by cell type, and see which embedding balances both.</div>
+  </section>
+
+</div>
+<script>
+// deterministic scatter for the two UMAP schematics
+function seeded(s){return function(){s=(s*1103515245+12345)&0x7fffffff;return s/0x7fffffff}}
+function draw(id,good){
+  var svg=document.getElementById(id), r=seeded(good?7:99), out="";
+  for(var i=0;i<64;i++){
+    var donor=i%2, col=donor?getComputedStyle(document.documentElement).getPropertyValue('--scvi'):getComputedStyle(document.documentElement).getPropertyValue('--harmony');
+    var x,y;
+    if(good){ x=60+(r()*2-1)*42; y=50+(r()*2-1)*34; }
+    else { var off=donor?22:-22; x=60+off+(r()*2-1)*16; y=50+(r()*2-1)*34; }
+    out+='<circle cx="'+x.toFixed(1)+'" cy="'+y.toFixed(1)+'" r="2.6" fill="'+col.trim()+'"/>';
+  }
+  svg.innerHTML=out;
+}
+draw('u1',false); draw('u2',true);
+</script>
+</body>
+</html>
