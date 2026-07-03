@@ -296,22 +296,18 @@ if not os.path.exists(SCVI_LATENT_FILE):
         "Repoint this path for your server (see CLAUDE.md).")
 _d = np.load(SCVI_LATENT_FILE, allow_pickle=True)
 _lat = pd.DataFrame(_d["latent"], index=_d["obs_names"].astype(str))
-# Your QC may differ from the reference run, so align to the precomputed latent: keep the cells
-# present in BOTH sets (the latent covers the reference 117,200-cell set) and continue with that
-# shared subset -- your own QC still applies, you just use the matching rows of the latent.
-_common = adata.obs_names.intersection(_lat.index)
-if len(_common) == 0:
+# Keep YOUR cells (your QC decides the cell set) and pull each one's scVI vector from the precomputed
+# output -- adata is NOT subset to a "common" set. This assumes your QC keeps a SUBSET of the
+# reference cells (you may filter more, but not add cells the reference run had dropped).
+_missing = adata.obs_names.difference(_lat.index)
+if len(_missing):
     raise ValueError(
-        "None of your cells are in the precomputed scVI latent -- check that obs_names match the "
-        "reference (same raw file / cell IDs), or set TRAIN_SCVI=True to train yourself.")
-_n_drop = adata.n_obs - len(_common)
-if _n_drop:
-    print(f"Your QC differs from the reference: {_n_drop:,} of {adata.n_obs:,} cells are not in the "
-          f"precomputed latent; continuing with the {len(_common):,} shared cells.")
-    adata = adata[adata.obs_names.isin(_common)].copy()
+        f"{len(_missing):,} of your {adata.n_obs:,} cells are not in the precomputed scVI latent. "
+        "The precomputed latent covers the reference cell set, so your QC must keep a SUBSET of it "
+        "(you can filter more, but not add cells the reference dropped). Re-check your QC, or set "
+        "TRAIN_SCVI=True to train scVI on your own cells.")
 adata.obsm["X_scvi"] = _lat.reindex(adata.obs_names).values.astype("float32")
-print(f"Loaded scVI latent for {adata.n_obs:,} cells -> X_scvi {adata.obsm['X_scvi'].shape} "
-      "(used for the comparison below).")
+print(f"Set X_scvi for your {adata.n_obs:,} cells from the precomputed latent -> {adata.obsm['X_scvi'].shape}.")
 print("X_scvi shape:", adata.obsm["X_scvi"].shape)
 """)
 
